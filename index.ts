@@ -13,6 +13,12 @@ interface Decorators {
     queryDecorators: RegExpMatchArray | null,
 }
 
+interface IndexConstant {
+    name: string,
+    value: string,
+    import: string,
+}
+
 function extractResponseDecoratorInfo(input: string): DecoratorInfo | null {
     const decoratorNameRegex = /@Api(\w+)\s*Response/g;
     const decoratorNameMatch = decoratorNameRegex.exec(input);
@@ -47,12 +53,11 @@ function extractQueryOrParamDecoratorInfo(input: string): string | null {
 
 
 function generateDocumentationEntry(
-    directoryName: string,
-    fileName: string,
+    documentationConstantName: string,
     decorators: Decorators,
     isAuth: boolean,
 ): string {
-    let documentationEntry = `export const ${directoryName}Documentation${fileName[0].toUpperCase() + fileName.slice(1)}: ApiDocumentationParams = {\n`;
+    let documentationEntry = `export const ${documentationConstantName}: ApiDocumentationParams = {\n`;
 
     if (isAuth){
         documentationEntry += 'isAuth: true,\n'
@@ -73,7 +78,9 @@ function generateDocumentationEntry(
                 bodies.push(body);
             }
         });
-        documentationEntry += `${decoratorType}: [\n${bodies.join(',\n')}\n],\n`;
+        if (bodies.length != 0){
+            documentationEntry += `${decoratorType}: [\n${bodies.join(',\n')},\n],\n`;
+        }
     };
 
     processDecorators('params', decorators.paramDecorators);
@@ -98,6 +105,10 @@ function getDecorators(fileContent: string): Decorators | undefined {
     }
     return {responseDecorators, paramDecorators, queryDecorators};
 }
+function camelToSnakeCase(input: string): string {
+    return input.replace(/([A-Z])/g, '_$1').toUpperCase();
+}
+
 
 const directoryName = readline.question('Enter folder name in src directory:');
 const directoryPath = `./src/${directoryName}`;
@@ -108,25 +119,42 @@ fs.readdir(directoryPath, (err, files) => {
         return;
     }
 
-    files.forEach((file) => {
-        const fileContent = fs.readFileSync(path.join(directoryPath, file), 'utf8');
+    const documentationDirectory = `./documentation/${directoryName}`;
+    const indexFileConsts: IndexConstant[] = [];
 
+    files.forEach((file) => {
         const fileNameWithoutExtension = path.parse(file).name;
+        const startCaseFileName = fileNameWithoutExtension[0].toUpperCase() + fileNameWithoutExtension.slice(1);
+        const documentationConstantName = `${directoryName}Documentation${startCaseFileName}`;
+
+        const fileContent = fs.readFileSync(path.join(directoryPath, file), 'utf8');
         const decorators = getDecorators(fileContent);
         const isAuth = fileContent.includes('@ApiCookieAuth()');
         if(!decorators) return;
 
         const documentationEntry = generateDocumentationEntry(
-            directoryName,
-            fileNameWithoutExtension,
+            documentationConstantName,
             decorators,
             isAuth
         );
 
-        const documentationDirectory = `./documentation/${directoryName}`;
         if (!fs.existsSync(documentationDirectory)){
             fs.mkdirSync(documentationDirectory);
         }
         fs.writeFileSync(`${documentationDirectory}/${fileNameWithoutExtension}.ts`, documentationEntry);
+
+
+        indexFileConsts.push({
+            name: camelToSnakeCase(fileNameWithoutExtension),
+            value: documentationConstantName,
+            import: `import { ${documentationConstantName} } from './${fileNameWithoutExtension}';`
+        });
     });
+
+    let indexFile = `\nexport const ${directoryName}Documentation = {\n`
+    for (const indexFileConst of indexFileConsts) {
+        indexFile = indexFileConst.import + '\n' + indexFile + `${indexFileConst.name}: ${indexFileConst.value},\n`
+    }
+    indexFile += '};'
+    fs.writeFileSync(`${documentationDirectory}/index.ts`, indexFile);
 });
