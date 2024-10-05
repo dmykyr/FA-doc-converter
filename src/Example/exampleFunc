@@ -1,0 +1,16 @@
+@ApiOkResponse({
+    type: boolean,
+  })
+@ApiBadRequestResponse({
+    description: `\n
+    InvalidVerificationTokenException:
+      Verification token is expired or invalid
+
+    AlreadyRegisteredException
+      User is already registered`,
+  })
+@ApiParam({
+  name: 'token',
+  required: true,
+  description: 'A verification token that is generated and sent to the user\'s email address.',
+})
