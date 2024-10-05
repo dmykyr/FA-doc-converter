@@ -21,7 +21,7 @@
 2. Add directory with controller name (should start with capital letter)
 3. Create files with name of controller's methods
 4. Move decorators from methods to corresponding files
-5. Run the application:
+5. Run the application and enter necessary directory name to parse in console dialog:
    ```sh
    yarn start
    ```
