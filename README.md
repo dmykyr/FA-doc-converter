@@ -27,4 +27,5 @@
    ```
 6. Created files will be located in ./documentation/your_controller_name/ directory.
 7. Paste created files to FiceAdvisor api documentation folder and add imports.
-8. As an example you can already run application and check created test documentation
+
+As an example you can already run application and check created test documentation
