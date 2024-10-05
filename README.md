@@ -21,11 +21,12 @@
 2. Add directory with controller name (should start with capital letter)
 3. Create files with name of controller's methods
 4. Move decorators from methods to corresponding files
-5. Run the application and enter necessary directory name to parse in console dialog:
+5. Run the application:
    ```sh
    yarn start
    ```
-6. Created files will be located in ./documentation/your_controller_name/ directory.
-7. Paste created files to FiceAdvisor api documentation folder and add imports.
+6. Enter necessary directory name to parse in console dialog
+7. Created files will be located in ./documentation/your_controller_name/ directory.
+8. Paste created files to FiceAdvisor api documentation folder and add imports.
 
 As an example you can already run application and check created test documentation
