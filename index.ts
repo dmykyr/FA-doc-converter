@@ -7,6 +7,12 @@ interface DecoratorInfo {
     body: string;
 }
 
+interface Decorators {
+    responseDecorators: RegExpMatchArray | null,
+    paramDecorators: RegExpMatchArray | null,
+    queryDecorators: RegExpMatchArray | null,
+}
+
 function extractResponseDecoratorInfo(input: string): DecoratorInfo | null {
     const decoratorNameRegex = /@Api(\w+)\s*Response/g;
     const decoratorNameMatch = decoratorNameRegex.exec(input);
@@ -29,68 +35,68 @@ function extractResponseDecoratorInfo(input: string): DecoratorInfo | null {
     return { name: decoratorName, body: decoratorBody };
 }
 
-function extractParamDecoratorInfo(input: string): string | null {
-    const apiParamRegex = /@ApiParam\(([^)]+)\)/g;
-    const apiParamMatch = apiParamRegex.exec(input);
+function extractQueryOrParamDecoratorInfo(input: string): string | null {
+    const regex = /@Api(Query|Param)\(([^)]+)\)/g;
+    const match = regex.exec(input);
 
-    if (!apiParamMatch) {
+    if (!match) {
         return null;
     }
-
-    return apiParamMatch[1].trim();
+    return match[2].trim();
 }
 
 
 function generateDocumentationEntry(
     directoryName: string,
     fileName: string,
-    responseDecorators: string[],
-    paramDecorators: string[]
+    decorators: Decorators,
+    isAuth: boolean,
 ): string {
     let documentationEntry = `export const ${directoryName}Documentation${fileName[0].toUpperCase() + fileName.slice(1)}: ApiDocumentationParams = {\n`;
-    const params: string[] = [];
 
-    responseDecorators.forEach((decorator) => {
+    if (isAuth){
+        documentationEntry += 'isAuth: true,\n'
+    }
+    decorators.responseDecorators?.forEach((decorator) => {
         const result = extractResponseDecoratorInfo(decorator);
         if (result) {
             result.body = result.body ? '{\n' + result.body + '\n},\n' : '{}';
             const camelCaseName = result.name[0].toLowerCase() + result.name.slice(1);
             documentationEntry += `${camelCaseName}: ${result.body}`;
-        } else {
-            console.log("Invalid input format for decorator in file:", fileName);
-            console.log('decorator:', decorator);
         }
     });
+    const processDecorators = (decoratorType: string, decorators: RegExpMatchArray | null) => {
+        const bodies: string[] = []
+        decorators?.forEach((decorator) => {
+            const body = extractQueryOrParamDecoratorInfo(decorator);
+            if (body) {
+                bodies.push(body);
+            }
+        });
+        documentationEntry += `${decoratorType}: [\n${bodies.join(',\n')}\n],\n`;
+    };
 
-    paramDecorators.forEach((decorator) => {
-        const apiParamBody = extractParamDecoratorInfo(decorator);
-        if (apiParamBody) {
-            params.push(apiParamBody);
-        }
-    });
+    processDecorators('params', decorators.paramDecorators);
+    processDecorators('queries', decorators.queryDecorators);
 
-    if (params.length != 0){
-        documentationEntry += `params: [\n${params.join(',\n')}\n],\n`;
-    }
     documentationEntry += '};';
     return documentationEntry;
 }
 
-function getDecorators(file: string): { responseDecorators: string[], paramDecorators:string[] } {
-    const fileContent = fs.readFileSync(path.join(directoryPath, file), 'utf8');
-    const decoratorRegex = /@Api(\w*)(Response|Param)\(\{[^}]*}\)/g;
-    const decorators = fileContent.match(decoratorRegex);
-    let responseDecorators: string[] = [];
-    let paramDecorators: string[] = [];
+function getDecorators(fileContent: string): Decorators | undefined {
+    const responseDecoratorRegex = /@Api(\w+)(Response)\(\{[^}]*}\)/g;
+    const paramDecoratorRegex = /(@ApiParam)\(\{[^}]*}\)/g;
+    const queryDecoratorRegex = /(@ApiQuery)\(\{[^}]*}\)/g;
 
-    if (!decorators) {
-        console.log(`No decorators found in ${file}.`);
-    } else {
-        responseDecorators = decorators.filter((decorator) => decorator.includes('Response'));
-        paramDecorators = decorators.filter((decorator) => decorator.includes('@ApiParam'));
+    const responseDecorators = fileContent.match(responseDecoratorRegex);
+    const paramDecorators = fileContent.match(paramDecoratorRegex);
+    const queryDecorators = fileContent.match(queryDecoratorRegex);
+
+    if (!responseDecorators && !paramDecorators && !queryDecorators) {
+        console.log(`No decorators found in ${fileContent}.`);
+        return;
     }
-
-    return {responseDecorators, paramDecorators};
+    return {responseDecorators, paramDecorators, queryDecorators};
 }
 
 const directoryName = readline.question('Enter folder name in src directory:');
@@ -103,13 +109,18 @@ fs.readdir(directoryPath, (err, files) => {
     }
 
     files.forEach((file) => {
+        const fileContent = fs.readFileSync(path.join(directoryPath, file), 'utf8');
+
         const fileNameWithoutExtension = path.parse(file).name;
-        const {responseDecorators, paramDecorators} = getDecorators(file);
+        const decorators = getDecorators(fileContent);
+        const isAuth = fileContent.includes('@ApiCookieAuth()');
+        if(!decorators) return;
+
         const documentationEntry = generateDocumentationEntry(
             directoryName,
             fileNameWithoutExtension,
-            responseDecorators,
-            paramDecorators
+            decorators,
+            isAuth
         );
 
         const documentationDirectory = `./documentation/${directoryName}`;
